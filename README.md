@@ -7,6 +7,7 @@ A thesis-driven VC intelligence interface with live AI enrichment. Surface high-
 ## Features
 
 ### Core Workflows
+- **Authentication** (`/login`) — Secure Email/Password and Google OAuth powered by Supabase
 - **Discovery** (`/companies`) — Search + faceted filters + sortable results table with pagination + bulk actions
 - **Company Profile** (`/companies/[id]`) — Overview, signals timeline, notes, AI enrichment, auto-tag suggestions, watch toggle
 - **Pipeline Kanban** (`/pipeline`) — Drag-and-drop pipeline: New → Reviewing → Due Diligence → Passed → Invested
@@ -59,12 +60,21 @@ npm install
 Create `.env.local` in the `vc-scout/` directory:
 
 ```env
-GOOGLE_GEMINI_API_KEY=your_gemini_api_key_here
+# Supabase Authentication
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# AI Enrichment (MegaLLM / OpenAI Proxy)
+OPENAI_API_KEY=your_megallm_api_key
+OPENAI_BASE_URL=https://ai.megallm.io/v1
+
+# Alternatively, Google Gemini API:
+GOOGLE_GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Get a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+Get a free API key from [MegaLLM](https://ai.megallm.io) or [Google AI Studio](https://aistudio.google.com). Set up an authentication project at [Supabase](https://supabase.com/).
 
-> **Security**: The enrichment API runs server-side via Next.js API routes (`/api/enrich`). API keys are never exposed to the browser.
+> **Security**: The enrichment API runs server-side via Next.js API routes (`/api/enrich`). API keys are never exposed to the browser. Supabase keys are safe to expose (`NEXT_PUBLIC_`) as they are anon-keys restricted by RLS policies.
 
 ### Run Development Server
 
@@ -94,15 +104,20 @@ Set `GOOGLE_GEMINI_API_KEY` in Vercel → Settings → Environment Variables.
 ```
 src/
 ├── app/
-│   ├── api/enrich/       # Server-side enrichment endpoint
-│   ├── companies/        # Discovery + profile pages
-│   ├── pipeline/         # Kanban board
-│   ├── compare/          # Side-by-side comparison
-│   ├── lists/            # Collection management
-│   ├── saved/            # Saved search views
-│   ├── activity/         # Analytics dashboard
-│   └── settings/         # Thesis configuration
+│   ├── (dashboard)/      # Authenticated layout wrapper
+│   │   ├── activity/     # Analytics dashboard
+│   │   ├── companies/    # Discovery + profile pages
+│   │   ├── compare/      # Side-by-side comparison
+│   │   ├── lists/        # Collection management
+│   │   ├── pipeline/     # Kanban board
+│   │   ├── saved/        # Saved search views
+│   │   └── settings/     # Thesis configuration
+│   ├── api/enrich/       # Server-side AI enrichment endpoint
+│   ├── auth/callback/    # Supabase OAuth callback handler
+│   ├── login/            # Authentication page
+│   └── page.tsx          # Root redirect to /companies
 ├── components/
+│   ├── auth/             # Context Providers (AuthProvider)
 │   ├── companies/        # CompanyTable, CompanyProfile, CompanyFilters, CompanyLogo
 │   ├── layout/           # Shell, TopNav, Sidebar
 │   ├── settings/         # ThesisSettingsForm
@@ -137,8 +152,9 @@ User clicks "Enrich" → POST /api/enrich
 | Framework | Next.js 14 (App Router) |
 | Language | TypeScript |
 | Styling | Tailwind CSS + shadcn/ui |
-| State | Zustand + localStorage persistence |
-| AI | Google Gemini 1.5 Flash |
+| State | Zustand + localStorage |
+| Auth | Supabase SSR (App Router) |
+| AI | MegaLLM / OpenAI / Gemini SDKs |
 | Scraping | Cheerio (server-side) |
 | Charts | Pure SVG (no charting library) |
 | Animations | Tailwind animate + CSS |
