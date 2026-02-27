@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || "API_KEY_NOT_FOUND");
-
+// Try to use a custom Base URL if one is provided in the ENV, otherwise use OpenAI defaults
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || "API_KEY_NOT_FOUND",
+    ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
+});
 // Helper to scrape a single URL
 async function scrapeUrl(url: string): Promise<{ text: string; url: string; scrapedAt: string; contentLength: number }> {
     const scrapedAt = new Date().toISOString();
@@ -72,12 +75,10 @@ export async function POST(req: NextRequest) {
         // Trim combined text to fit within model context
         const pageText = combinedText.slice(0, 12000);
 
-        const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+        const apiKey = process.env.OPENAI_API_KEY;
 
-        if (apiKey && apiKey !== "YOUR_GEMINI_API_KEY_HERE") {
+        if (apiKey && apiKey !== "YOUR_GEMINI_API_KEY_HERE" && apiKey !== "API_KEY_NOT_FOUND") {
             try {
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
                 const prompt = `You are a venture capital analyst. Analyze the following scraped company website content and provide an investment-grade analysis.
 
 Website content:
@@ -91,15 +92,11 @@ Return ONLY valid JSON with this exact structure (no markdown, no code fences):
   "whatTheyDo": [
     "First key capability or product feature",
     "Second key capability",
-    "Third key capability",
-    "Fourth key capability (if applicable)",
-    "Fifth key capability (if applicable)"
+    "Third key capability"
   ],
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5", "keyword6", "keyword7"],
+  "keywords": ["keyword1", "keyword2", "keyword3"],
   "derivedSignals": [
-    {"type": "careers", "label": "Careers page signal", "description": "Description of hiring activity detected", "date": "${new Date().toISOString()}"},
-    {"type": "product", "label": "Product signal", "description": "Description of product momentum signal", "date": "${new Date().toISOString()}"},
-    {"type": "content", "label": "Content signal", "description": "Description of content/blog activity", "date": "${new Date().toISOString()}"}
+    {"type": "careers", "label": "Careers page signal", "description": "Description of hiring activity detected", "date": "${new Date().toISOString()}"}
   ],
   "sector": "Primary sector classification (e.g., Developer Tools, AI/ML, Enterprise SaaS, Healthcare, Fintech)",
   "targetCustomer": "B2B or B2C or B2B2C"
@@ -111,12 +108,27 @@ Requirements:
 - derivedSignals must be 2-4 signals actually inferred from the content (careers page exists, recent blog posts, changelog present, documentation site, etc.)
 - Be specific and factual based on the content provided`;
 
-                const result = await model.generateContent(prompt);
-                const aiResponse = await result.response;
-                const text = aiResponse.text();
+                const completion = await openai.chat.completions.create({
+                    model: "openai-gpt-oss-20b",
+                    messages: [
+                        { role: "system", content: "You are a specialized VC analyst assistant." },
+                        { role: "user", content: prompt }
+                    ],
+                    response_format: { type: "json_object" },
+                });
 
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
-                const aiData = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+                const text = completion.choices[0]?.message?.content || "{}";
+
+                // Robust JSON parsing
+                let aiData;
+                try {
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    const jsonString = jsonMatch ? jsonMatch[0] : text;
+                    aiData = JSON.parse(jsonString);
+                } catch (parseError) {
+                    console.error("Failed to parse JSON", parseError);
+                    return NextResponse.json({ error: 'Failed to extract JSON from AI response' }, { status: 500 });
+                }
 
                 if (aiData) {
                     // Ensure whatTheyDo is an array
@@ -127,34 +139,39 @@ Requirements:
                     return NextResponse.json({
                         ...aiData,
                         enrichedAt: new Date().toISOString(),
-                        enrichmentModel: 'Gemini 1.5 Flash',
+                        enrichmentModel: 'openai-gpt-oss-20b',
                         sources,
                     });
                 }
             } catch (aiError) {
-                console.error('Gemini error:', aiError);
+                console.error('OpenAI proxy error:', aiError);
+                return NextResponse.json({ error: 'Failed to retrieve AI enrichment' }, { status: 500 });
             }
+        } else {
+            return NextResponse.json({ error: 'API key missing' }, { status: 401 });
         }
 
-        // Fallback: demo mode response
-        return NextResponse.json({
-            summary: "Innovative tech firm optimizing digital transformation workflows.",
-            whatTheyDo: [
-                "Provides scalable cloud infrastructure for modern applications",
-                "Offers developer-friendly APIs and SDKs",
-                "Delivers enterprise-grade security and compliance tooling",
-                "Enables real-time data processing and analytics pipelines"
-            ],
-            keywords: ["SaaS", "Enterprise", "Infrastructure", "Cloud", "APIs", "DevTools"],
-            derivedSignals: [
-                { type: "careers", label: "Active hiring", description: "Career page detected with open engineering roles.", date: new Date().toISOString() },
-                { type: "product", label: "Product momentum", description: "Recent product updates or changelog entries detected.", date: new Date().toISOString() }
-            ],
-            enrichedAt: new Date().toISOString(),
-            enrichmentModel: 'Internal Engine (Demo Mode)',
-            sources,
-            isMock: true
-        });
+        return NextResponse.json({ error: 'Unexpected error occurred' }, { status: 500 });
+
+        // // Fallback: demo mode response
+        // return NextResponse.json({
+        //     summary: "Innovative tech firm optimizing digital transformation workflows.",
+        //     whatTheyDo: [
+        //         "Provides scalable cloud infrastructure for modern applications",
+        //         "Offers developer-friendly APIs and SDKs",
+        //         "Delivers enterprise-grade security and compliance tooling",
+        //         "Enables real-time data processing and analytics pipelines"
+        //     ],
+        //     keywords: ["SaaS", "Enterprise", "Infrastructure", "Cloud", "APIs", "DevTools"],
+        //     derivedSignals: [
+        //         { type: "careers", label: "Active hiring", description: "Career page detected with open engineering roles.", date: new Date().toISOString() },
+        //         { type: "product", label: "Product momentum", description: "Recent product updates or changelog entries detected.", date: new Date().toISOString() }
+        //     ],
+        //     enrichedAt: new Date().toISOString(),
+        //     enrichmentModel: 'Internal Engine (Demo Mode)',
+        //     sources,
+        //     isMock: true
+        // });
 
     } catch (error: any) {
         console.error('API Route Error:', error);

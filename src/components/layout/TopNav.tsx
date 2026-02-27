@@ -1,27 +1,31 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, Building2, ListTodo, Target, Sparkles, Plus, Globe, AlertTriangle, Bookmark } from "lucide-react"
+import { Search, Building2, ListTodo, Target, Sparkles, Plus, Globe, AlertTriangle, Bookmark, LogOut, User, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useCompanyStore } from "@/lib/store/useCompanyStore"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { toast } from "sonner"
 
 interface TopNavProps {
     onSearchClick: () => void
+    onMenuClick?: () => void
 }
 
-export function TopNav({ onSearchClick }: TopNavProps) {
+export function TopNav({ onSearchClick, onMenuClick }: TopNavProps) {
     const pathname = usePathname()
     const addCompany = useCompanyStore((state) => state.addCompany)
     const companies = useCompanyStore((state) => state.companies)
+    const { user, signOut } = useAuth()
     const [open, setOpen] = useState(false)
 
     const [newCompany, setNewCompany] = useState({
@@ -81,13 +85,25 @@ export function TopNav({ onSearchClick }: TopNavProps) {
         setOpen(false)
     }
 
+    const userInitial = user?.email?.charAt(0).toUpperCase() || 'U'
+
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
             <div className="container max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center gap-8">
+                <div className="flex items-center gap-4 lg:gap-8">
+                    {/* Mobile menu button */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="lg:hidden h-9 w-9"
+                        onClick={onMenuClick}
+                    >
+                        <Menu className="h-5 w-5" />
+                    </Button>
+
                     <Link href="/" className="flex items-center gap-2 group">
-                        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center transition-transform group-hover:scale-110">
-                            <Target className="h-5 w-5 text-primary-foreground" />
+                        <div className="h-8 w-8 rounded-lg bg-primary overflow-hidden flex items-center justify-center transition-transform group-hover:scale-110">
+                            <img src="/logo.png" alt="VC Scout" className="h-full w-full object-cover" />
                         </div>
                         <span className="text-xl font-bold tracking-tight gradient-text hidden sm:inline-block">
                             VC Scout
@@ -112,7 +128,7 @@ export function TopNav({ onSearchClick }: TopNavProps) {
                     </nav>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                     <Button
                         variant="outline"
                         className="relative h-9 w-9 p-0 xl:w-60 xl:justify-start xl:px-3 xl:py-2 rounded-full hidden sm:flex"
@@ -233,6 +249,28 @@ export function TopNav({ onSearchClick }: TopNavProps) {
                             </div>
                         </DialogContent>
                     </Dialog>
+
+                    {/* User profile dropdown */}
+                    {user && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="rounded-full h-9 w-9 p-0 bg-primary/10 hover:bg-primary/20 transition-colors">
+                                    <span className="text-sm font-bold text-primary">{userInitial}</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 rounded-xl">
+                                <div className="px-3 py-2">
+                                    <p className="text-sm font-bold truncate">{user.email}</p>
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">Analyst</p>
+                                </div>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive cursor-pointer">
+                                    <LogOut className="h-4 w-4 mr-2" />
+                                    Sign Out
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
                 </div>
             </div>
         </header>

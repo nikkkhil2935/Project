@@ -15,8 +15,44 @@ const navItems = [
     { name: "Thesis", href: "/settings/thesis", icon: Target, description: "Investment mandate" },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+    mobile?: boolean
+    onNavigate?: () => void
+}
+
+export function Sidebar({ mobile, onNavigate }: SidebarProps) {
     const pathname = usePathname()
+
+    // If mobile, render just the nav items (wrapper is in Shell)
+    if (mobile) {
+        return (
+            <>
+                <p className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground px-3 py-3">Navigation</p>
+                {navItems.map(item => {
+                    const isActive = pathname === item.href || (item.href === "/companies" && pathname.startsWith("/companies"))
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={onNavigate}
+                            className={cn(
+                                "flex items-center gap-2.5 px-3 py-3 rounded-xl transition-all group text-sm",
+                                isActive
+                                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            )}
+                        >
+                            <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
+                            <div className="min-w-0">
+                                <span className="font-bold text-[13px] block truncate">{item.name}</span>
+                                <p className={cn("text-[9px] truncate", isActive ? "text-primary-foreground/70" : "text-muted-foreground/50")}>{item.description}</p>
+                            </div>
+                        </Link>
+                    )
+                })}
+            </>
+        )
+    }
 
     return (
         <aside className="hidden lg:flex flex-col w-56 border-r bg-card/50 min-h-[calc(100vh-4rem)] p-3 gap-0.5 shrink-0">

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createClient } from '../supabase/client'
 
 export interface List {
     id: string;
@@ -9,7 +9,9 @@ export interface List {
 
 interface ListState {
     lists: List[];
+    loaded: boolean;
 
+    fetchLists: () => Promise<void>;
     createList: (name: string) => void;
     deleteList: (id: string) => void;
     renameList: (id: string, name: string) => void;
@@ -18,43 +20,112 @@ interface ListState {
 }
 
 export const useListStore = create<ListState>()(
-    persist(
-        (set) => ({
-            lists: [
-                { id: '1', name: 'High Priority (Q3)', companyIds: ['1', '3'] },
-                { id: '2', name: 'Watchlist', companyIds: ['2', '4'] }
-            ],
+    (set, get) => ({
+        lists: [],
+        loaded: false,
 
-            createList: (name) => set((state) => ({
-                lists: [...state.lists, { id: Date.now().toString(), name, companyIds: [] }]
-            })),
+        fetchLists: async () => {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
 
-            deleteList: (id) => set((state) => ({
+            const { data: listsData, error } = await supabase
+                .from('lists')
+                .select('*, list_companies(company_id)')
+                .order('created_at', { ascending: false })
+
+            if (error) {
+                console.error('Error fetching lists:', error)
+                set({ loaded: true })
+                return
+            }
+
+            if (listsData && listsData.length > 0) {
+                const lists: List[] = listsData.map((l: any) => ({
+                    id: l.id,
+                    name: l.name,
+                    companyIds: (l.list_companies || []).map((lc: any) => lc.company_id)
+                }))
+                set({ lists, loaded: true })
+            } else {
+                set({ lists: [], loaded: true })
+            }
+        },
+
+        createList: (name) => {
+            const tempId = Date.now().toString()
+            set((state) => ({
+                lists: [...state.lists, { id: tempId, name, companyIds: [] }]
+            }))
+
+            const persist = async () => {
+                const supabase = createClient()
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) return
+
+                const { data, error } = await supabase
+                    .from('lists')
+                    .insert({ user_id: user.id, name })
+                    .select()
+                    .single()
+
+                if (data) {
+                    set((state) => ({
+                        lists: state.lists.map(l =>
+                            l.id === tempId ? { ...l, id: data.id } : l
+                        )
+                    }))
+                }
+            }
+            persist()
+        },
+
+        deleteList: (id) => {
+            set((state) => ({
                 lists: state.lists.filter(l => l.id !== id)
-            })),
+            }))
 
-            renameList: (id, name) => set((state) => ({
+            const supabase = createClient()
+            supabase.from('lists').delete().eq('id', id).then()
+        },
+
+        renameList: (id, name) => {
+            set((state) => ({
                 lists: state.lists.map(l => l.id === id ? { ...l, name } : l)
-            })),
+            }))
 
-            addToList: (listId, companyId) => set((state) => ({
+            const supabase = createClient()
+            supabase.from('lists').update({ name }).eq('id', id).then()
+        },
+
+        addToList: (listId, companyId) => {
+            set((state) => ({
                 lists: state.lists.map(l =>
                     l.id === listId && !l.companyIds.includes(companyId)
                         ? { ...l, companyIds: [...l.companyIds, companyId] }
                         : l
                 )
-            })),
+            }))
 
-            removeFromList: (listId, companyId) => set((state) => ({
+            const supabase = createClient()
+            supabase.from('list_companies').insert({ list_id: listId, company_id: companyId }).then()
+        },
+
+        removeFromList: (listId, companyId) => {
+            set((state) => ({
                 lists: state.lists.map(l =>
                     l.id === listId
                         ? { ...l, companyIds: l.companyIds.filter(id => id !== companyId) }
                         : l
                 )
-            })),
-        }),
-        {
-            name: 'list-storage'
-        }
-    )
+            }))
+
+            const supabase = createClient()
+            supabase.from('list_companies')
+                .delete()
+                .eq('list_id', listId)
+                .eq('company_id', companyId)
+                .then()
+        },
+    })
 )
