@@ -109,7 +109,7 @@ Requirements:
 - Be specific and factual based on the content provided`;
 
                 const completion = await openai.chat.completions.create({
-                    model: "openai-gpt-oss-20b",
+                    model: "llama-3.3-70b-versatile",
                     messages: [
                         { role: "system", content: "You are a specialized VC analyst assistant." },
                         { role: "user", content: prompt }
@@ -139,7 +139,7 @@ Requirements:
                     return NextResponse.json({
                         ...aiData,
                         enrichedAt: new Date().toISOString(),
-                        enrichmentModel: 'openai-gpt-oss-20b',
+                        enrichmentModel: 'llama-3.3-70b-versatile',
                         sources,
                     });
                 }

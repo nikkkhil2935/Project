@@ -10,7 +10,13 @@ export async function GET(request: Request) {
         const supabase = await createServerSupabaseClient()
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            return NextResponse.redirect(`${origin}${next}`)
+            // successful authentication
+            // remove url params
+            const targetUrl = new URL(`${origin}${next}`)
+            targetUrl.searchParams.delete('code')
+            return NextResponse.redirect(targetUrl)
+        } else {
+            console.error("Auth callback error:", error)
         }
     }
 
