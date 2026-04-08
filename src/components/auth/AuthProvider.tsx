@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { User } from "@supabase/supabase-js"
+import { isSupabaseEnabled } from "@/lib/supabase/config"
 
 interface AuthContextType {
     user: User | null
@@ -22,6 +23,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = createClient()
 
     useEffect(() => {
+        if (!isSupabaseEnabled()) {
+            setLoading(false)
+            return
+        }
+
         const getUser = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             setUser(user)
@@ -40,6 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, [])
 
     const signOut = async () => {
+        if (!isSupabaseEnabled()) {
+            setUser(null)
+            window.location.href = '/'
+            return
+        }
+
         await supabase.auth.signOut()
         setUser(null)
         window.location.href = '/'

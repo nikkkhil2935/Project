@@ -1,10 +1,17 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isSupabaseEnabled } from '@/lib/supabase/config'
+import { getAppUrl } from '@/lib/app-url'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-    const { searchParams, origin } = new URL(request.url)
+    const { searchParams } = new URL(request.url)
+    const appUrl = getAppUrl()
     const code = searchParams.get('code')
     const next = searchParams.get('next') ?? '/'
+
+    if (!isSupabaseEnabled()) {
+        return NextResponse.redirect(`${appUrl}/login?error=supabase_disabled`)
+    }
 
     if (code) {
         const supabase = await createServerSupabaseClient()
@@ -12,7 +19,7 @@ export async function GET(request: Request) {
         if (!error) {
             // successful authentication
             // remove url params
-            const targetUrl = new URL(`${origin}${next}`)
+            const targetUrl = new URL(`${appUrl}${next}`)
             targetUrl.searchParams.delete('code')
             return NextResponse.redirect(targetUrl)
         } else {
@@ -21,5 +28,5 @@ export async function GET(request: Request) {
     }
 
     // URL to redirect to after sign in process completes
-    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+    return NextResponse.redirect(`${appUrl}/login?error=auth_failed`)
 }

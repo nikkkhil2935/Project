@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { isSupabaseEnabled } from "@/lib/supabase/config"
+import { getAuthCallbackUrl } from "@/lib/app-url"
 import { useRouter } from "next/navigation"
 import { Mail, Lock, ArrowRight, Loader2, Target } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -23,13 +25,19 @@ export default function LoginPage() {
         setSuccess(null)
         setLoading(true)
 
+        if (!isSupabaseEnabled()) {
+            setError("Supabase is disabled for local development. Set valid Supabase credentials in .env.local to enable sign up.")
+            setLoading(false)
+            return
+        }
+
         try {
             if (isSignUp) {
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${window.location.origin}/auth/callback`,
+                        emailRedirectTo: getAuthCallbackUrl(),
                     },
                 })
                 if (error) throw error
@@ -51,12 +59,17 @@ export default function LoginPage() {
     }
 
     const handleGoogleAuth = async () => {
+        if (!isSupabaseEnabled()) {
+            setError("Supabase is disabled for local development. Set valid Supabase credentials in .env.local to enable Google sign in.")
+            return
+        }
+
         try {
             setGoogleLoading(true)
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback`
+                    redirectTo: getAuthCallbackUrl()
                 }
             })
             if (error) throw error
@@ -167,7 +180,7 @@ export default function LoginPage() {
                         whileTap={{ scale: 0.98 }}
                         type="button"
                         onClick={handleGoogleAuth}
-                        disabled={googleLoading || loading}
+                        disabled={googleLoading || loading || !isSupabaseEnabled()}
                         className="w-full h-12 bg-card hover:bg-muted border border-border/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] rounded-xl text-sm font-semibold flex items-center justify-center gap-3 transition-all mb-6 disabled:opacity-50 text-foreground overflow-hidden relative group"
                     >
                         {googleLoading ? (
